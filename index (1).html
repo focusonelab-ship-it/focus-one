@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>FocusOne - 雙聲態沉浸式專注系統 (Final Release)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #020904;
+            --card-bg: rgba(10, 30, 18, 0.85);
+            --accent-green: #10b981;
+            --accent-gold: #fbbf24;
+            --accent-blue: #38bdf8;
+            --accent-red: #f87171;
+            --accent-fire: #f97316;
+            --text-main: #f0fdf4;
+            --border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Noto Sans TC', sans-serif;
+            min-height: 100vh;
+            padding: 16px;
+            display: flex; justify-content: center;
+            transition: background-color 0.8s ease;
+            user-select: none;
+        }
+
+        .app-container { width: 100%; max-width: 1020px; display: flex; flex-direction: column; gap: 16px; }
+
+        header {
+            display: flex; justify-content: space-between; align-items: center;
+            background: var(--card-bg); padding: 12px 20px; border-radius: 16px; border: 1px solid var(--border-color);
+            transition: all 0.5s ease;
+        }
+        .brand-title { font-size: 1.4rem; font-weight: 800; color: var(--accent-green); display: flex; align-items: center; gap: 8px; }
+        .user-stats { display: flex; gap: 12px; font-weight: 600; font-size: 0.9rem; }
+        .stat-badge { background: rgba(0,0,0,0.4); padding: 6px 12px; border-radius: 20px; border: 1px solid var(--border-color); }
+
+        .game-card {
+            background: rgba(0, 0, 0, 0.95); border: 2px solid var(--accent-green);
+            border-radius: 20px; padding: 16px; position: relative;
+            box-shadow: 0 0 30px rgba(16, 185, 129, 0.2);
+            transition: all 0.5s ease;
+            overflow: hidden;
+        }
+        .game-card.fire-active {
+            border-color: var(--accent-fire);
+            box-shadow: 0 0 50px rgba(249, 115, 22, 0.35);
+        }
+        .game-card.wave-active {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 50px rgba(56, 189, 248, 0.35);
+        }
+
+        .progress-top-bar {
+            position: absolute; top: 0; left: 0; height: 6px;
+            background: linear-gradient(90deg, #f97316, #fbbf24);
+            width: 0%; transition: width 0.3s ease, background 0.5s ease; z-index: 5;
+            box-shadow: 0 0 10px #f97316;
+        }
+
+        .progress-overlay {
+            position: absolute; top: 16px; right: 20px;
+            display: flex; align-items: center; gap: 10px;
+            background: rgba(0, 0, 0, 0.65); padding: 6px 14px;
+            border-radius: 20px; border: 1px solid rgba(249, 115, 22, 0.4);
+            z-index: 3; backdrop-filter: blur(4px);
+            transition: border-color 0.5s ease;
+        }
+
+        .progress-ring-circle {
+            transition: stroke-dashoffset 0.35s, stroke 0.5s ease;
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+
+        .progress-text {
+            font-size: 0.85rem; font-weight: 800; color: var(--accent-gold);
+            min-width: 45px; text-align: right;
+        }
+
+        #canvasContainer { 
+            width: 100%; 
+            height: 400px; 
+            border-radius: 14px; 
+            overflow: hidden; 
+            position: relative;
+            transition: height 0.5s ease;
+        }
+        
+        #canvasContainer::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, transparent 35%, rgba(2, 9, 4, 0.75) 80%, rgba(0,0,0,0.98) 100%);
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .controls-overlay {
+            position: absolute; bottom: 16px; left: 16px; right: 16px;
+            display: flex; justify-content: space-between; align-items: center; gap: 10px;
+            z-index: 3;
+        }
+        .btn-game {
+            background: var(--accent-green); color: #000; font-weight: 800;
+            padding: 10px 18px; border-radius: 12px; border: none; cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5); transition: transform 0.1s, background 0.3s;
+            font-size: 0.95rem;
+        }
+        .btn-game:hover { opacity: 0.95; }
+        .btn-game:active { transform: scale(0.96); }
+        .btn-zen { background: var(--accent-blue); }
+        .btn-fire { background: var(--accent-fire); color: #fff; }
+        .btn-voice { background: var(--accent-gold); color: #000; }
+
+        .grid-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; transition: opacity 0.5s ease; }
+        @media (max-width: 768px) { .grid-layout { grid-template-columns: 1fr; } }
+
+        .card {
+            background: var(--card-bg); border: 1px solid var(--border-color);
+            border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 12px;
+            transition: background 0.5s ease, border-color 0.5s ease;
+        }
+
+        .timer-display { font-size: 3.2rem; font-weight: 800; text-align: center; color: var(--accent-gold); font-family: monospace; }
+        .input-box { width: 100%; background: rgba(0,0,0,0.5); border: 1px solid var(--border-color); padding: 10px; border-radius: 10px; color: #fff; outline: none; }
+        .input-box:focus { border-color: var(--accent-green); }
+        
+        .chat-log { 
+            background: rgba(0,0,0,0.6); border-radius: 10px; padding: 12px; 
+            height: 220px; overflow-y: auto; font-size: 0.9rem; line-height: 1.6;
+            display: flex; flex-direction: column; gap: 8px;
+        }
+        
+        .chat-msg { padding: 8px 12px; border-radius: 8px; max-width: 90%; }
+        .chat-msg.ai { background: rgba(16, 185, 129, 0.15); border-left: 3px solid var(--accent-green); align-self: flex-start; }
+        .chat-msg.user { background: rgba(56, 189, 248, 0.15); border-right: 3px solid var(--accent-blue); align-self: flex-end; }
+
+        .solution-box {
+            background: rgba(0, 0, 0, 0.5); border: 1px solid var(--accent-gold);
+            padding: 12px; border-radius: 10px; font-size: 0.85rem; line-height: 1.5;
+        }
+
+        .voice-status {
+            font-size: 0.8rem; font-weight: 700; color: var(--accent-blue);
+            display: flex; align-items: center; gap: 6px;
+        }
+        .voice-dot { width: 8px; height: 8px; border-radius: 50%; background: #6b7280; }
+        .voice-dot.listening { background: var(--accent-red); animation: pulse 1s infinite; }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.4); opacity: 0.5; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        body.zen-active {
+            padding: 0;
+            overflow: hidden;
+            background-color: #000;
+        }
+        body.zen-active .app-container {
+            max-width: 100vw;
+            height: 100vh;
+            gap: 0;
+        }
+        body.zen-active .grid-layout, 
+        body.zen-active header { 
+            display: none !important; 
+        }
+        body.zen-active .game-card {
+            border: none;
+            border-radius: 0;
+            height: 100vh;
+            padding: 0;
+            box-shadow: none;
+        }
+        body.zen-active #canvasContainer { 
+            height: 100vh; 
+            border-radius: 0;
+        }
+        body.zen-active .controls-overlay {
+            bottom: 30px;
+            left: 30px;
+            right: 30px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <header id="appHeader">
+            <div class="brand-title">🔥 FocusOne <span style="font-size: 0.8rem; font-weight:400; opacity:0.8;">v1.0 Final (Dual-Audio)</span></div>
+            <div class="user-stats">
+                <div class="stat-badge">🎖️ <span id="userLv">Lv.1</span></div>
+                <div class="stat-badge">⚡ <span id="userExp">0</span>/100</div>
+                <div class="stat-badge">🧠 心流品質: <span id="flowScoreDisplay" style="color:var(--accent-gold);">100%</span></div>
+            </div>
+        </header>
+
+        <div class="game-card" id="gameCard">
+            <div class="progress-top-bar" id="topProgressBar"></div>
+
+            <div class="progress-overlay" id="progressOverlay">
+                <svg width="28" height="28">
+                    <circle stroke="rgba(255,255,255,0.2)" stroke-width="3" fill="transparent" r="11" cx="14" cy="14"/>
+                    <circle class="progress-ring-circle" id="ringCircle" stroke="#f97316" stroke-width="3" 
+                            stroke-dasharray="69.11 69.11" stroke-dashoffset="69.11" fill="transparent" r="11" cx="14" cy="14"/>
+                </svg>
+                <div class="progress-text" id="progressPercent">0%</div>
+            </div>
+
+            <div id="canvasContainer"></div>
+            <div class="controls-overlay">
+                <button class="btn-game" id="btnStartWalk">▶ 開啟專注 (點燃篝火)</button>
+                <button class="btn-game btn-fire" id="btnToggleAnim">🔥 切換模式: 火光啪啪聲</button>
+                <button class="btn-game btn-zen" id="btnZenToggle">🧘 禪模式 (全螢幕)</button>
+            </div>
+        </div>
+
+        <div class="grid-layout">
+            <div class="card" id="cardTimer">
+                <div style="font-weight:700; color:var(--accent-gold);">⏱️ 原子任務與診斷中心</div>
+                <input type="text" id="taskName" class="input-box" placeholder="輸入目標任務 (例如: 撰寫專案大綱)...">
+                <div class="timer-display" id="timerDisplay">25:00</div>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn-game" id="btnPause" style="flex:1; background:#4b5563; color:#fff;">⏸ 暫停 (微壓熄火)</button>
+                    <button class="btn-game" id="btnCompleteTask" style="flex:1; background:var(--accent-gold);">✅ 結算並生成報告</button>
+                </div>
+
+                <div class="solution-box" id="solutionPanel">
+                    💡 <strong>原子診斷面板：</strong><br>
+                    完成或暫停專注後，系統將依據行為數據自動拆解出最高效的改善方案。
+                </div>
+            </div>
+
+            <div class="card" id="cardChat">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="font-weight:700; color:var(--accent-green);" id="chatTitle">💬 AI 專注顧問與復盤</div>
+                    <div class="voice-status">
+                        <div class="voice-dot" id="voiceDot"></div>
+                        <span id="voiceStatusText">語音待命</span>
+                    </div>
+                </div>
+
+                <div class="chat-log" id="aiChatLog">
+                    <div class="chat-msg ai"><strong>Alex:</strong> 你好！雙模式聲光系統已就緒，隨時為你提供專屬的專注沉浸空間。</div>
+                </div>
+
+                <div style="display:flex; gap:8px;">
+                    <button class="btn-game btn-voice" id="btnVoiceListen" style="flex:1;">🎙️ 語音對話 / 聲控</button>
+                    <button class="btn-game" id="btnToggleTTS" style="background:#4b5563; color:#fff;">🔊 朗讀: 開</button>
+                </div>
+
+                <div style="display:flex; gap:8px;">
+                    <input type="text" id="userInput" class="input-box" placeholder="輸入訊息對話...">
+                    <button class="btn-game" id="btnSendMsg">發送</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 雙模式擬真音效引擎（模式 1：木柴篝火聲 | 模式 2：海浪潮汐聲）
+        const SoundFX = {
+            ctx: null,
+            crackleInterval: null,
+            noiseNode: null,
+            oceanLfo: null,
+            oceanGain: null,
+            
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            },
+            
+            startSound(mode = 'fire', isZen = false) {
+                this.init();
+                this.stopSound();
+
+                if (mode === 'fire') {
+                    this.startAirWindNoise(isZen);
+                    const intervalTime = isZen ? 70 : 100;
+                    this.crackleInterval = setInterval(() => {
+                        if (Math.random() < 0.65) {
+                            this.playWoodCrack(isZen);
+                        }
+                    }, intervalTime);
+                } else if (mode === 'wave') {
+                    this.startOceanWaves(isZen);
+                }
+            },
+            
+            stopSound() {
+                if (this.crackleInterval) {
+                    clearInterval(this.crackleInterval);
+                    this.crackleInterval = null;
+                }
+                this.stopAirWindNoise();
+                this.stopOceanWaves();
+            },
+
+            // --- 模式 1：柴火聲音與爆裂音效 ---
+            playWoodCrack(isZen) {
+                if (!this.ctx) return;
+                
+                const now = this.ctx.currentTime;
+                const dur = 0.012 + Math.random() * 0.018;
+                const buffer = this.ctx.createBuffer(1, this.ctx.sampleRate * dur, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                
+                for (let i = 0; i < buffer.length; i++) {
+                    data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / buffer.length, 2.5);
+                }
+                
+                const source = this.ctx.createBufferSource();
+                source.buffer = buffer;
+
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.value = 900 + Math.random() * 1500;
+                filter.Q.value = 2.5;
+
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime((0.12 + Math.random() * 0.22) * (isZen ? 1.4 : 1.0), now);
+
+                source.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                source.start(now);
+            },
+
+            startAirWindNoise(isZen) {
+                if (!this.ctx) return;
+                
+                const bufferSize = this.ctx.sampleRate * 2;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const output = buffer.getChannelData(0);
+                let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+
+                for (let i = 0; i < bufferSize; i++) {
+                    let white = Math.random() * 2 - 1;
+                    b0 = 0.99886 * b0 + white * 0.0555179;
+                    b1 = 0.99332 * b1 + white * 0.0750759;
+                    b2 = 0.96900 * b2 + white * 0.1538520;
+                    b3 = 0.86650 * b3 + white * 0.3104856;
+                    b4 = 0.55000 * b4 + white * 0.5329522;
+                    b5 = -0.7616 * b5 - white * 0.0168980;
+                    output[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+                    output[i] *= 0.09;
+                    b6 = white * 0.115926;
+                }
+
+                const whiteNoise = this.ctx.createBufferSource();
+                whiteNoise.buffer = buffer;
+                whiteNoise.loop = true;
+
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 350;
+
+                const gain = this.ctx.createGain();
+                gain.gain.value = isZen ? 0.22 : 0.14;
+
+                whiteNoise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                whiteNoise.start();
+                this.noiseNode = { whiteNoise, gain };
+            },
+
+            stopAirWindNoise() {
+                if (this.noiseNode) {
+                    try { this.noiseNode.whiteNoise.stop(); } catch(e){}
+                    this.noiseNode = null;
+                }
+            },
+
+            // --- 模式 2：海浪潮汐與呼吸白噪音效果 ---
+            startOceanWaves(isZen) {
+                if (!this.ctx) return;
+
+                const bufferSize = this.ctx.sampleRate * 3;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                
+                // 粉紅噪音生成
+                let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+                for (let i = 0; i < bufferSize; i++) {
+                    let white = Math.random() * 2 - 1;
+                    b0 = 0.99886 * b0 + white * 0.0555179;
+                    b1 = 0.99332 * b1 + white * 0.0750759;
+                    b2 = 0.96900 * b2 + white * 0.1538520;
+                    b3 = 0.86650 * b3 + white * 0.3104856;
+                    b4 = 0.55000 * b4 + white * 0.5329522;
+                    b5 = -0.7616 * b5 - white * 0.0168980;
+                    data[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.05;
+                    b6 = white * 0.115926;
+                }
+
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                noise.loop = true;
+
+                // 低通波形濾波器
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 400;
+
+                // LFO 低頻振盪器模擬海浪起伏 (約 0.12Hz週期)
+                const lfo = this.ctx.createOscillator();
+                lfo.type = 'sine';
+                lfo.frequency.value = 0.12; 
+
+                const lfoGain = this.ctx.createGain();
+                lfoGain.gain.value = 0.18; // 潮起潮落振幅
+
+                const mainGain = this.ctx.createGain();
+                mainGain.gain.value = isZen ? 0.35 : 0.25;
+
+                lfo.connect(lfoGain);
+                lfoGain.connect(mainGain.gain);
+
+                noise.connect(filter);
+                filter.connect(mainGain);
+                mainGain.connect(this.ctx.destination);
+
+                lfo.start();
+                noise.start();
+
+                this.oceanLfo = lfo;
+                this.oceanGain = { noise, mainGain };
+            },
+
+            stopOceanWaves() {
+                if (this.oceanLfo) {
+                    try { this.oceanLfo.stop(); } catch(e){}
+                    this.oceanLfo = null;
+                }
+                if (this.oceanGain) {
+                    try { this.oceanGain.noise.stop(); } catch(e){}
+                    this.oceanGain = null;
+                }
+            },
+
+            playChime() {
+                this.init();
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, now);
+                osc.frequency.exponentialRampToValueAtTime(1046.50, now + 0.8);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.8);
+            }
+        };
+
+        const MemorySystem = {
+            storageKey: 'FOCUS_ATOMIC_REAL_FIRE_MEMORY_V1',
+            load() {
+                const data = localStorage.getItem(this.storageKey);
+                return data ? JSON.parse(data) : { level: 1, exp: 0, totalSessions: 0, history: [] };
+            },
+            save(memory) {
+                localStorage.setItem(this.storageKey, JSON.stringify(memory));
+            }
+        };
+
+        let userMemory = MemorySystem.load();
+        let sessionTracker = { startTime: null, pauseCount: 0, task: "", userNotes: [] };
+        let isWalking = false, isZenMode = false, timerInterval = null, totalSeconds = 1500, secondsLeft = 1500, isTTSEnabled = true;
+        let animMode = 'fire'; // 'fire' 或 'wave'
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition = SpeechRecognition ? new SpeechRecognition() : null;
+        if (recognition) { recognition.lang = 'zh-TW'; recognition.continuous = false; }
+
+        let scene, camera, renderer, fireLight, wavePoints;
+        let flameParticlesGroup, emberParticles, logGroup;
+
+        // 生成高階質感火焰貼圖
+        function createSoftFireTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64; canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+
+            const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+            gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+            gradient.addColorStop(0.25, 'rgba(255, 190, 60, 0.85)');
+            gradient.addColorStop(0.6, 'rgba(235, 75, 15, 0.35)');
+            gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 64, 64);
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function init3D() {
+            const container = document.getElementById('canvasContainer');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x020704);
+
+            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+            
+            // 下移焦點，目標完全居中
+            camera.position.set(0, 0.1, 6.5);
+            camera.lookAt(0, -0.25, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+
+            scene.add(new THREE.AmbientLight(0x112211, 0.5));
+
+            fireLight = new THREE.PointLight(0xff7722, 3.0, 15);
+            fireLight.position.set(0, -0.6, 0);
+            scene.add(fireLight);
+
+            // 木柴組
+            logGroup = new THREE.Group();
+            const logMat = new THREE.MeshStandardMaterial({ color: 0x2d1810, roughness: 0.95 });
+            for (let i = 0; i < 5; i++) {
+                const log = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 1.8), logMat);
+                log.rotation.z = Math.PI / 2.3;
+                log.rotation.y = (i * Math.PI) / 5;
+                log.position.set(0, -1.2, 0);
+                logGroup.add(log);
+            }
+            scene.add(logGroup);
+
+            // 火焰主體粒子
+            const particleCount = 200;
+            const pGeo = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            const pData = [];
+
+            const fireTexture = createSoftFireTexture();
+
+            for (let i = 0; i < particleCount; i++) {
+                const x = (Math.random() - 0.5) * 0.55;
+                const y = -1.1 + Math.random() * 1.8;
+                const z = (Math.random() - 0.5) * 0.55;
+
+                positions[i * 3] = x;
+                positions[i * 3 + 1] = y;
+                positions[i * 3 + 2] = z;
+
+                pData.push({
+                    speedY: 0.016 + Math.random() * 0.024,
+                    life: Math.random(),
+                    swayOffset: Math.random() * Math.PI * 2
+                });
+            }
+
+            pGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const pMat = new THREE.PointsMaterial({
+                size: 1.25,
+                map: fireTexture,
+                transparent: true,
+                opacity: 0.72,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+
+            flameParticlesGroup = new THREE.Points(pGeo, pMat);
+            flameParticlesGroup.userData = { pData };
+            scene.add(flameParticlesGroup);
+
+            // 微小火星粒子
+            const emberCount = 70;
+            const eGeo = new THREE.BufferGeometry();
+            const ePos = new Float32Array(emberCount * 3);
+            const eData = [];
+
+            for (let i = 0; i < emberCount; i++) {
+                ePos[i * 3] = (Math.random() - 0.5) * 1.2;
+                ePos[i * 3 + 1] = -1.0 + Math.random() * 2.5;
+                ePos[i * 3 + 2] = (Math.random() - 0.5) * 1.2;
+
+                eData.push({
+                    speedY: 0.02 + Math.random() * 0.03,
+                    speedX: (Math.random() - 0.5) * 0.01
+                });
+            }
+
+            eGeo.setAttribute('position', new THREE.BufferAttribute(ePos, 3));
+            const eMat = new THREE.PointsMaterial({
+                color: 0xffb733,
+                size: 0.14,
+                transparent: true,
+                opacity: 0.85,
+                blending: THREE.AdditiveBlending
+            });
+
+            emberParticles = new THREE.Points(eGeo, eMat);
+            emberParticles.userData = { eData };
+            scene.add(emberParticles);
+
+            // 呼吸海浪波浪模式
+            const waveGeo = new THREE.BufferGeometry();
+            const wavePos = new Float32Array(500 * 3);
+            for (let i = 0; i < 500; i++) {
+                wavePos[i * 3] = (i - 250) * 0.07;
+                wavePos[i * 3 + 1] = -0.5;
+                wavePos[i * 3 + 2] = (Math.random() - 0.5) * 3.5;
+            }
+            waveGeo.setAttribute('position', new THREE.BufferAttribute(wavePos, 3));
+            const waveMat = new THREE.PointsMaterial({ color: 0x38bdf8, size: 0.22, transparent: true, opacity: 0.8 });
+            wavePoints = new THREE.Points(waveGeo, waveMat);
+            wavePoints.visible = false;
+            scene.add(wavePoints);
+
+            animate();
+        }
+
+        let clockTime = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+            clockTime += 0.03;
+
+            const speedMult = isZenMode ? (isWalking ? 2.2 : 1.4) : (isWalking ? 1.8 : 1.0);
+
+            if (animMode === 'fire') {
+                const pos = flameParticlesGroup.geometry.attributes.position.array;
+                const pData = flameParticlesGroup.userData.pData;
+
+                for (let i = 0; i < pData.length; i++) {
+                    const data = pData[i];
+                    data.life += data.speedY * speedMult * 0.03;
+
+                    if (data.life > 1.0) {
+                        data.life = 0;
+                        pos[i * 3] = (Math.random() - 0.5) * 0.45;
+                        pos[i * 3 + 1] = -1.1;
+                        pos[i * 3 + 2] = (Math.random() - 0.5) * 0.45;
+                    } else {
+                        pos[i * 3 + 1] += data.speedY * speedMult;
+                        pos[i * 3] += Math.sin(clockTime * 3 + data.swayOffset) * 0.007;
+                    }
+                }
+                flameParticlesGroup.geometry.attributes.position.needsUpdate = true;
+
+                const ePos = emberParticles.geometry.attributes.position.array;
+                const eData = emberParticles.userData.eData;
+                for (let i = 0; i < eData.length; i++) {
+                    ePos[i * 3 + 1] += eData[i].speedY * speedMult;
+                    ePos[i * 3] += eData[i].speedX + Math.sin(clockTime * 2 + i) * 0.004;
+
+                    if (ePos[i * 3 + 1] > 2.0) {
+                        ePos[i * 3 + 1] = -1.0;
+                        ePos[i * 3] = (Math.random() - 0.5) * 1.0;
+                    }
+                }
+                emberParticles.geometry.attributes.position.needsUpdate = true;
+                fireLight.intensity = (isWalking ? 3.5 : 2.0) + Math.sin(clockTime * 6) * 0.4;
+            } else {
+                const pos = wavePoints.geometry.attributes.position.array;
+                for (let i = 0; i < 500; i++) {
+                    pos[i * 3 + 1] = -0.4 + Math.sin(clockTime * 0.8 + pos[i * 3] * 0.35) * (isZenMode ? 1.4 : 0.85);
+                }
+                wavePoints.geometry.attributes.position.needsUpdate = true;
+                fireLight.intensity = 1.5 + Math.sin(clockTime * 1.2) * 0.5;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function handleResize() {
+            const container = document.getElementById('canvasContainer');
+            if (!container || !renderer || !camera) return;
+
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+
+            camera.position.set(0, 0.1, 6.5);
+            camera.lookAt(0, -0.25, 0);
+        }
+
+        window.addEventListener('resize', handleResize);
+
+        function updateProgressUI() {
+            const elapsed = totalSeconds - secondsLeft;
+            const pct = Math.min(100, Math.max(0, Math.floor((elapsed / totalSeconds) * 100)));
+            
+            document.getElementById('topProgressBar').style.width = `${pct}%`;
+            document.getElementById('progressPercent').innerText = `${pct}%`;
+
+            const circle = document.getElementById('ringCircle');
+            const circumference = 2 * Math.PI * 11;
+            const offset = circumference - (pct / 100) * circumference;
+            circle.style.strokeDashoffset = offset;
+        }
+
+        function toggleZenMode() {
+            isZenMode = !isZenMode;
+            document.body.classList.toggle('zen-active', isZenMode);
+
+            const btn = document.getElementById('btnZenToggle');
+
+            if (isZenMode) {
+                btn.innerText = "✖ 退出禪模式";
+                if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen().catch(() => {});
+                }
+            } else {
+                btn.innerText = "🧘 禪模式 (全螢幕)";
+                if (document.fullscreenElement && document.exitFullscreen) {
+                    document.exitFullscreen().catch(() => {});
+                }
+            }
+
+            if (isWalking) {
+                SoundFX.startSound(animMode, isZenMode);
+            }
+
+            setTimeout(handleResize, 100);
+            setTimeout(handleResize, 300);
+        }
+
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement && isZenMode) {
+                isZenMode = false;
+                document.body.classList.remove('zen-active');
+                document.getElementById('btnZenToggle').innerText = "🧘 禪模式 (全螢幕)";
+                if (isWalking) SoundFX.startSound(animMode, false);
+                setTimeout(handleResize, 100);
+            }
+        });
+
+        function switchModeUI(mode) {
+            const gameCard = document.getElementById('gameCard');
+            const topBar = document.getElementById('topProgressBar');
+            const ringCircle = document.getElementById('ringCircle');
+            const btnToggleAnim = document.getElementById('btnToggleAnim');
+
+            if (mode === 'fire') {
+                document.documentElement.style.setProperty('--bg-color', '#020904');
+                document.documentElement.style.setProperty('--card-bg', 'rgba(10, 30, 18, 0.85)');
+                document.documentElement.style.setProperty('--border-color', 'rgba(16, 185, 129, 0.3)');
+
+                gameCard.classList.remove('wave-active');
+                if (isWalking) gameCard.classList.add('fire-active');
+
+                topBar.style.background = 'linear-gradient(90deg, #f97316, #fbbf24)';
+                topBar.style.boxShadow = '0 0 10px #f97316';
+                ringCircle.setAttribute('stroke', '#f97316');
+
+                btnToggleAnim.innerText = "🔥 切換模式: 火光啪啪聲";
+                btnToggleAnim.className = "btn-game btn-fire";
+
+                fireLight.color.setHex(0xff7722);
+            } else {
+                document.documentElement.style.setProperty('--bg-color', '#020c1b');
+                document.documentElement.style.setProperty('--card-bg', 'rgba(10, 25, 47, 0.85)');
+                document.documentElement.style.setProperty('--border-color', 'rgba(56, 189, 248, 0.3)');
+
+                gameCard.classList.remove('fire-active');
+                if (isWalking) gameCard.classList.add('wave-active');
+
+                topBar.style.background = 'linear-gradient(90deg, #0284c7, #38bdf8)';
+                topBar.style.boxShadow = '0 0 10px #38bdf8';
+                ringCircle.setAttribute('stroke', '#38bdf8');
+
+                btnToggleAnim.innerText = "🌊 切換模式: 潮汐浪濤聲";
+                btnToggleAnim.className = "btn-game btn-zen";
+
+                fireLight.color.setHex(0x38bdf8);
+            }
+
+            if (isWalking) {
+                SoundFX.startSound(animMode, isZenMode);
+            }
+        }
+
+        function addChatMessage(role, text) {
+            const log = document.getElementById('aiChatLog');
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `chat-msg ${role}`;
+            msgDiv.innerHTML = `<strong>${role === 'ai' ? 'Alex' : '你'}:</strong> ${text}`;
+            log.appendChild(msgDiv);
+            log.scrollTop = log.scrollHeight;
+
+            if (role === 'ai' && isTTSEnabled && 'speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utter = new SpeechSynthesisUtterance(text);
+                utter.lang = 'zh-TW';
+                window.speechSynthesis.speak(utter);
+            }
+        }
+
+        function handleChatInput(text) {
+            addChatMessage('user', text);
+
+            if (text.includes("開始") || text.includes("專注")) {
+                startFocusSession();
+                addChatMessage('ai', `好的！模式已啟動。為你開啟 ${animMode === 'fire' ? '柴火燃燒聲' : '海浪波濤聲'}`);
+                return;
+            }
+            if (text.includes("暫停")) {
+                pauseFocusSession();
+                addChatMessage('ai', "專注已暫停，環境聲減弱。請告訴我遭遇了什麼干擾？");
+                return;
+            }
+            if (text.includes("完成") || text.includes("結算")) {
+                completeFocusSession();
+                return;
+            }
+
+            let response = "";
+            if (text.includes("卡關") || text.includes("難") || text.includes("沒頭緒")) {
+                response = "【原子診斷】啟動能過高！嘗試「微觀拆解」：將目標縮小到只需 3 分鐘就能完成的最小動作。";
+            } else if (text.includes("累") || text.includes("分心")) {
+                response = "【原子診斷】專注力衰減。建議點擊「禪模式」避開視覺干擾，沉浸於專屬音效。";
+            } else {
+                response = `已記錄「${text}」。這將作為調校你專注力方案的基準。`;
+            }
+
+            sessionTracker.userNotes.push(text);
+            addChatMessage('ai', response);
+        }
+
+        function generateSolutionDiagnosis() {
+            const pauses = sessionTracker.pauseCount;
+            let flowScore = Math.max(30, 100 - (pauses * 15));
+            let rootCause = "";
+            let actionPlan = [];
+
+            if (pauses === 0) {
+                rootCause = "狀態極佳，沉浸聲效發揮最大作用，環境與任務難度達成最佳平衡。";
+                actionPlan = ["1. 維持目前極簡工作環境。", "2. 下一次可嘗試微幅增加 5 分鐘專注長度。"];
+            } else if (pauses <= 2) {
+                rootCause = "遭遇輕度注意力轉移或外部訊息干擾，致使心流中斷。";
+                actionPlan = ["1. 開啟【禪模式】降低介面干擾。", "2. 執行「5秒法則」：發現分心立刻回歸。"];
+            } else {
+                rootCause = "任務顆粒度過大，大腦產生隱性抗拒致使燃燒中斷。";
+                actionPlan = ["1. 將目標拆解為 2 個可在 5 分鐘內完成的子目標。", "2. 調整為 15 分鐘微型專注週期。"];
+            }
+
+            document.getElementById('solutionPanel').innerHTML = `
+                💡 <strong>原子診斷報告：</strong><br>
+                • <strong>心流品質分數：</strong> <span style="color:var(--accent-gold); font-weight:bold;">${flowScore}%</span><br>
+                • <strong>成因分析：</strong> ${rootCause}<br>
+                • <strong>原子行動指南：</strong><br>
+                ${actionPlan.map(item => `&nbsp;&nbsp;${item}`).join('<br>')}
+            `;
+
+            userMemory.totalSessions += 1;
+            userMemory.history.push({ date: new Date().toISOString(), task: sessionTracker.task, score: flowScore });
+            userMemory.exp += 40;
+            if (userMemory.exp >= 100) { userMemory.level += 1; userMemory.exp -= 100; }
+            MemorySystem.save(userMemory);
+            updateUI();
+
+            addChatMessage('ai', `診斷完成！本次心流分數 ${flowScore}%。建議：${actionPlan[0]}`);
+        }
+
+        function updateUI() {
+            document.getElementById('userLv').innerText = "Lv." + userMemory.level;
+            document.getElementById('userExp').innerText = userMemory.exp;
+            if (userMemory.history.length > 0) {
+                let avg = userMemory.history.reduce((acc, cur) => acc + cur.score, 0) / userMemory.history.length;
+                document.getElementById('flowScoreDisplay').innerText = Math.round(avg) + "%";
+            }
+        }
+
+        function startFocusSession() {
+            isWalking = true;
+            const gameCard = document.getElementById('gameCard');
+            if (animMode === 'fire') {
+                gameCard.classList.add('fire-active');
+            } else {
+                gameCard.classList.add('wave-active');
+            }
+            
+            sessionTracker.startTime = new Date();
+            sessionTracker.pauseCount = 0;
+            sessionTracker.task = document.getElementById('taskName').value || "未命名任務";
+            
+            SoundFX.startSound(animMode, isZenMode);
+            document.getElementById('solutionPanel').innerHTML = `🔥 <strong>專注熱烈進行中：</strong> [${animMode === 'fire' ? '篝火聲' : '潮汐聲'}] 播放中，進入深度心流...`;
+            
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                if (secondsLeft > 0) {
+                    secondsLeft--;
+                    const m = Math.floor(secondsLeft / 60).toString().padStart(2, '0');
+                    const s = (secondsLeft % 60).toString().padStart(2, '0');
+                    document.getElementById('timerDisplay').innerText = `${m}:${s}`;
+                    updateProgressUI();
+                } else {
+                    completeFocusSession();
+                }
+            }, 1000);
+        }
+
+        function pauseFocusSession() {
+            isWalking = false;
+            document.getElementById('gameCard').classList.remove('fire-active', 'wave-active');
+            sessionTracker.pauseCount += 1;
+            SoundFX.stopSound();
+            if (timerInterval) clearInterval(timerInterval);
+            document.getElementById('solutionPanel').innerHTML = `⚠️ <strong>專注暫停：</strong> 累積中斷 ${sessionTracker.pauseCount} 次。點擊「結算」獲取優化方案。`;
+        }
+
+        function completeFocusSession() {
+            isWalking = false;
+            document.getElementById('gameCard').classList.remove('fire-active', 'wave-active');
+            SoundFX.stopSound();
+            SoundFX.playChime();
+            if (timerInterval) clearInterval(timerInterval);
+            generateSolutionDiagnosis();
+        }
+
+        window.onload = () => {
+            init3D();
+            updateUI();
+            updateProgressUI();
+
+            document.getElementById('btnStartWalk').onclick = () => startFocusSession();
+            document.getElementById('btnPause').onclick = () => pauseFocusSession();
+            document.getElementById('btnCompleteTask').onclick = () => completeFocusSession();
+
+            document.getElementById('btnToggleAnim').onclick = () => {
+                animMode = (animMode === 'fire') ? 'wave' : 'fire';
+                
+                flameParticlesGroup.visible = (animMode === 'fire');
+                emberParticles.visible = (animMode === 'fire');
+                logGroup.visible = (animMode === 'fire');
+                wavePoints.visible = (animMode === 'wave');
+
+                switchModeUI(animMode);
+            };
+
+            document.getElementById('btnZenToggle').onclick = () => toggleZenMode();
+
+            document.getElementById('btnSendMsg').onclick = () => {
+                const input = document.getElementById('userInput');
+                if (input.value) { handleChatInput(input.value); input.value = ""; }
+            };
+
+            document.getElementById('userInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && e.target.value) { handleChatInput(e.target.value); e.target.value = ""; }
+            });
+
+            document.getElementById('btnToggleTTS').onclick = () => {
+                isTTSEnabled = !isTTSEnabled;
+                document.getElementById('btnToggleTTS').innerText = isTTSEnabled ? "🔊 朗讀: 開" : "🔇 朗讀: 關";
+            };
+
+            if (recognition) {
+                const btnVoice = document.getElementById('btnVoiceListen');
+                btnVoice.onclick = () => {
+                    try { recognition.start(); } catch (e) { recognition.stop(); }
+                };
+                recognition.onstart = () => {
+                    document.getElementById('voiceDot').classList.add('listening');
+                    document.getElementById('voiceStatusText').innerText = "正在聆聽...";
+                };
+                recognition.onend = () => {
+                    document.getElementById('voiceDot').classList.remove('listening');
+                    document.getElementById('voiceStatusText').innerText = "語音待命";
+                };
+                recognition.onresult = (e) => { handleChatInput(e.results[0][0].transcript); };
+            }
+        };
+    </script>
+</body>
+</html>
